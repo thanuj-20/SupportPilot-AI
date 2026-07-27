@@ -1,0 +1,32 @@
+# ── Environment variables (NEVER commit) ─────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# ── ML / FAISS binaries ───────────────────────────────────────────────────
+*.pkl
+*.joblib
+*.faiss
+
+# ── Logs ──────────────────────────────────────────────────────────────────
+*.log
+
+# ── Frontend build output ─────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/build/
+frontend/coverage/
+
+# ── OS / IDE ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

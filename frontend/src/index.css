@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+/* ── Scrollbar (dark default) ────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+/* ── Light theme overrides ───────────────────────────────────────────────── */
+html.light body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+/* backgrounds */
+html.light .bg-gray-950 { background-color: #f1f5f9 !important; }
+html.light .bg-gray-900 { background-color: #ffffff !important; }
+html.light .bg-gray-800 { background-color: #f1f5f9 !important; }
+
+/* borders */
+html.light .border-gray-800 { border-color: #e2e8f0 !important; }
+html.light .border-gray-700 { border-color: #cbd5e1 !important; }
+html.light .border-gray-600 { border-color: #94a3b8 !important; }
+
+/* text */
+html.light .text-white    { color: #0f172a !important; }
+html.light .text-gray-100 { color: #1e293b !important; }
+html.light .text-gray-200 { color: #334155 !important; }
+html.light .text-gray-300 { color: #475569 !important; }
+html.light .text-gray-400 { color: #64748b !important; }
+html.light .text-gray-500 { color: #94a3b8 !important; }
+html.light .text-gray-600 { color: #94a3b8 !important; }
+
+/* navbar — keep dark blue */
+html.light nav.bg-gray-900 {
+  background-color: #1e40af !important;
+  border-bottom: 1px solid #1d4ed8;
+}
+html.light nav .text-white       { color: #ffffff !important; }
+html.light nav .text-gray-300    { color: #bfdbfe !important; }
+html.light nav .text-gray-400    { color: #93c5fd !important; }
+html.light nav .border-gray-700  { border-color: #3b82f6 !important; }
+html.light nav .hover\:text-white:hover { color: #ffffff !important; }
+
+/* inputs */
+html.light input,
+html.light textarea {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html.light input::placeholder,
+html.light textarea::placeholder { color: #94a3b8 !important; }
+
+/* modal backdrop */
+html.light .bg-black\/70 { background-color: rgba(15,23,42,0.5) !important; }
+
+/* modal content area */
+html.light .bg-gray-950.rounded-xl { background-color: #f8fafc !important; }
+
+/* coloured tinted backgrounds */
+html.light .bg-blue-900\/20  { background-color: #eff6ff !important; }
+html.light .bg-blue-900\/30  { background-color: #dbeafe !important; }
+html.light .bg-blue-900\/40  { background-color: #bfdbfe !important; }
+html.light .bg-blue-900\/50  { background-color: #bfdbfe !important; }
+html.light .bg-green-900\/20 { background-color: #f0fdf4 !important; }
+html.light .bg-green-900\/30 { background-color: #dcfce7 !important; }
+html.light .bg-green-900\/40 { background-color: #bbf7d0 !important; }
+html.light .bg-green-900\/50 { background-color: #bbf7d0 !important; }
+html.light .bg-red-900\/40   { background-color: #fef2f2 !important; }
+html.light .bg-yellow-900\/20  { background-color: #fefce8 !important; }
+html.light .bg-yellow-900\/30  { background-color: #fef9c3 !important; }
+html.light .bg-yellow-900\/50  { background-color: #fef08a !important; }
+html.light .bg-purple-900\/30  { background-color: #f5f3ff !important; }
+html.light .bg-orange-900\/30  { background-color: #fff7ed !important; }
+
+/* StatCard coloured borders */
+html.light .border-blue-700   { border-color: #93c5fd !important; }
+html.light .border-green-700  { border-color: #86efac !important; }
+html.light .border-red-700    { border-color: #fca5a5 !important; }
+html.light .border-purple-700 { border-color: #c4b5fd !important; }
+html.light .border-orange-700 { border-color: #fdba74 !important; }
+
+/* coloured text — keep readable on light */
+html.light .text-blue-400    { color: #2563eb !important; }
+html.light .text-blue-300    { color: #1d4ed8 !important; }
+html.light .text-green-400   { color: #16a34a !important; }
+html.light .text-green-300   { color: #15803d !important; }
+html.light .text-yellow-300  { color: #a16207 !important; }
+html.light .text-red-300     { color: #dc2626 !important; }
+html.light .text-red-400     { color: #b91c1c !important; }
+html.light .text-orange-400  { color: #ea580c !important; }
+html.light .text-purple-400  { color: #7c3aed !important; }
+
+/* KnowledgeResultCard category badges */
+html.light .bg-emerald-900\/40  { background-color: #d1fae5 !important; }
+html.light .border-emerald-700  { border-color: #6ee7b7 !important; }
+html.light .text-emerald-300    { color: #059669 !important; }
+html.light .bg-sky-900\/40      { background-color: #e0f2fe !important; }
+html.light .border-sky-700      { border-color: #7dd3fc !important; }
+html.light .text-sky-300        { color: #0284c7 !important; }
+html.light .bg-purple-900\/40   { background-color: #ede9fe !important; }
+html.light .border-purple-700   { border-color: #c4b5fd !important; }
+html.light .text-purple-300     { color: #7c3aed !important; }
+html.light .bg-blue-900\/40     { background-color: #dbeafe !important; }
+html.light .border-blue-800     { border-color: #93c5fd !important; }
+html.light .bg-orange-900\/40   { background-color: #ffedd5 !important; }
+html.light .border-orange-700   { border-color: #fdba74 !important; }
+html.light .text-orange-300     { color: #ea580c !important; }
+html.light .bg-rose-900\/40     { background-color: #ffe4e6 !important; }
+html.light .border-rose-700     { border-color: #fda4af !important; }
+html.light .text-rose-300       { color: #e11d48 !important; }
+html.light .bg-yellow-900\/40   { background-color: #fef9c3 !important; }
+html.light .border-yellow-800   { border-color: #fde047 !important; }
+html.light .bg-red-900\/40      { background-color: #fee2e2 !important; }
+html.light .border-red-700      { border-color: #fca5a5 !important; }
+html.light .bg-indigo-900\/40   { background-color: #e0e7ff !important; }
+html.light .border-indigo-700   { border-color: #a5b4fc !important; }
+html.light .text-indigo-300     { color: #4338ca !important; }
+
+/* similarity bar track */
+html.light .bg-gray-800.rounded-full { background-color: #e2e8f0 !important; }
+
+/* ── Tickets / Submit / Predict light overrides ─────────────────────────── */
+
+/* table dividers & row hover */
+html.light .divide-gray-700 > * { border-color: #e2e8f0 !important; }
+html.light .hover\:bg-gray-800:hover { background-color: #f8fafc !important; }
+html.light .hover\:bg-gray-700:hover { background-color: #e2e8f0 !important; }
+
+/* inputs & textareas with explicit bg-gray-800 class */
+html.light input.bg-gray-800,
+html.light textarea.bg-gray-800 { background-color: #f8fafc !important; }
+
+/* keyword highlight marks */
+html.light mark.bg-yellow-400\/30 {
+  background-color: rgba(250,204,21,0.35) !important;
+  color: #713f12 !important;
+}
+html.light mark.bg-yellow-400\/40 {
+  background-color: rgba(250,204,21,0.45) !important;
+  color: #713f12 !important;
+}
+
+/* scrollbar */
+html.light ::-webkit-scrollbar-track { background: #f1f5f9; }
+html.light ::-webkit-scrollbar-thumb { background: #cbd5e1; }

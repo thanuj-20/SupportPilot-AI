@@ -1,0 +1,14 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.29.0
+pymongo>=4.7.2
+motor>=3.4.0
+pandas>=2.0.0
+openpyxl>=3.1.2
+scikit-learn>=1.4.0
+joblib>=1.4.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.9
+sentence-transformers>=2.7.0
+faiss-cpu>=1.7.4
+pymupdf>=1.23.0
+python-docx>=0.8.11
