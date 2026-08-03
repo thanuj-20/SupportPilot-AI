@@ -1,11 +1,16 @@
 import { NavLink } from "react-router-dom";
 
 const links = [
-  { to: "/",          label: "Dashboard"     },
-  { to: "/tickets",   label: "Tickets"       },
-  { to: "/submit",    label: "Submit"        },
-  { to: "/predict",   label: "Predict"       },
-  { to: "/knowledge", label: "Knowledge Base" },
+  { to: "/",            label: "Dashboard"      },
+  { to: "/tickets",     label: "Tickets"        },
+  { to: "/predict",     label: "Predict"        },
+  { to: "/knowledge",   label: "Knowledge Base" },
+  { to: "/workflow",    label: "Workflow"        },
+  { to: "/wf-monitor",  label: "WF Monitor"     },
+  { to: "/escalations", label: "Escalations"    },
+  { to: "/jira",        label: "Jira"           },
+  { to: "/emails",      label: "Emails"         },
+  { to: "/integrations",label: "Integrations"   },
 ];
 
 export default function Navbar({ onLogout, theme, onToggleTheme }) {

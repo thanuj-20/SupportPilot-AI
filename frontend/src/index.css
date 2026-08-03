@@ -153,3 +153,18 @@ html.light mark.bg-yellow-400\/40 {
 /* scrollbar */
 html.light ::-webkit-scrollbar-track { background: #f1f5f9; }
 html.light ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+
+/* ── Milestone 3 — Workflow / Jira / Email / Integrations ────────────── */
+html.light .text-teal-400  { color: #0d9488 !important; }
+html.light .border-blue-800 { border-color: #93c5fd !important; }
+html.light .border-green-800 { border-color: #86efac !important; }
+
+/* ── Milestone 4 — Escalation / Workflow Monitor ────────────────────── */
+html.light .divide-gray-800 > * { border-color: #e2e8f0 !important; }
+html.light .border-yellow-700  { border-color: #fde047 !important; }
+html.light .bg-yellow-900\/40  { background-color: #fef9c3 !important; }
+html.light select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}

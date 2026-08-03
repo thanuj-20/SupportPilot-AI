@@ -12,3 +12,4 @@ sentence-transformers>=2.7.0
 faiss-cpu>=1.7.4
 pymupdf>=1.23.0
 python-docx>=0.8.11
+gunicorn>=22.0.0

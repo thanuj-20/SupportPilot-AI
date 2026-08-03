@@ -1,84 +1,80 @@
-# SupportPilot – AI Ticket Resolution Agent (Milestone 1)
+# SupportPilot AI — Milestone 4
 
-## Stack
-- **Backend**: FastAPI + scikit-learn + Motor (async MongoDB)
-- **Database**: MongoDB Atlas
-- **Frontend**: React + Tailwind CSS v4 + Recharts
-
----
-
-## Project Structure
+## Architecture
 
 ```
-Springboard/
-├── tickets/                  # Dataset folder (CSV or XLSX auto-detected)
-├── backend/
-│   ├── main.py               # FastAPI app entry point
-│   ├── train_offline.py      # Standalone training script
-│   ├── .env                  # MongoDB URI (not committed)
-│   ├── requirements.txt
-│   ├── database/
-│   │   └── connection.py     # Motor async MongoDB client
-│   ├── ml/
-│   │   ├── preprocessor.py   # Cleaning, encoding, train/test split
-│   │   ├── trainer.py        # TF-IDF + LogisticRegression, metrics, save/load
-│   │   └── saved_models/     # category_model.pkl, priority_model.pkl, metrics.json
-│   ├── models/
-│   │   └── schemas.py        # Pydantic request/response models
-│   ├── routes/
-│   │   └── ticket_routes.py  # All API endpoints
-│   ├── services/
-│   │   └── ticket_service.py # Business logic layer
-│   └── utils/
-│       └── dataset_loader.py # Auto-detect & load dataset
-└── frontend/
-    ├── src/
-    │   ├── components/       # Navbar, StatCard, TicketsTable
-    │   ├── pages/            # Dashboard, Tickets, Predict
-    │   └── services/api.js   # Axios API calls
-    └── postcss.config.js
+SupportPilot-AI/
+├── backend/                   # FastAPI + scikit-learn + Motor (async MongoDB)
+│   ├── agents/                # DiagnosisAgent, RetrievalAgent, ResolutionAgent, EscalationAgent, Orchestrator
+│   ├── database/              # Motor async MongoDB client
+│   ├── knowledge/             # FAISS index, RAG generator, chunker, embedder
+│   ├── ml/                    # TF-IDF + LogisticRegression, preprocessor, trainer
+│   ├── models/                # Pydantic schemas
+│   ├── routes/                # ticket_routes, knowledge_routes, workflow_routes, escalation_routes
+│   ├── services/              # ticket_service, jira_service, email_service, escalation_service
+│   ├── utils/                 # dataset_loader
+│   ├── main.py
+│   ├── train_offline.py
+│   └── requirements.txt
+├── frontend/                  # React + Tailwind CSS v4 + Recharts
+│   └── src/
+│       ├── components/        # Navbar, StatCard, TicketsTable, ArticleModal, etc.
+│       ├── pages/             # Dashboard, Tickets, Predict, KnowledgeBase, WorkflowPage,
+│       │                      # JiraPage, EmailPage, IntegrationsPage, EscalationPage, WorkflowMonitorPage
+│       └── services/api.js
+├── knowledge_base/            # Markdown articles for FAISS/RAG
+└── tickets/                   # Dataset CSV/XLSX (auto-detected)
 ```
 
 ---
 
-## Setup Instructions
+## Environment Variables
+
+### backend/.env
+```
+MONGO_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net/?appName=Cluster0
+DB_NAME=supportpilot
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_gmail@gmail.com
+SMTP_PASS=your_app_password
+SMTP_FROM=SupportPilot <your_gmail@gmail.com>
+```
+
+### frontend/.env (optional)
+```
+VITE_API_URL=http://localhost:8000/api
+```
+
+---
+
+## Setup
 
 ### 1. Backend
-
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-Create `.env` (already present):
-```
-MONGO_URI=mongodb+srv://<user>:<password>@cluster0.ofzudky.mongodb.net/?appName=Cluster0
-DB_NAME=supportpilot
+Train models (first run):
+```bash
+python train_offline.py
+# or via API:
+curl -X POST http://localhost:8000/api/train
 ```
 
-Start the API server:
+Start server:
 ```bash
 uvicorn main:app --reload --port 8000
 ```
 
-### 2. Train Models
-
-Either via the API (POST request):
-```bash
-curl -X POST http://localhost:8000/api/train
-```
-
-Or run the offline script:
-```bash
-python train_offline.py
-```
-
-### 3. Frontend
-
+### 2. Frontend
 ```bash
 cd frontend
 npm install
-npm start        # dev server on http://localhost:3000
+npm start        # dev — http://localhost:3000
+npm run build    # production build → frontend/dist/
 ```
 
 ---
@@ -87,36 +83,87 @@ npm start        # dev server on http://localhost:3000
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/train` | Load dataset, train models, store in MongoDB |
-| GET | `/api/tickets?skip=0&limit=100` | Paginated ticket list |
-| GET | `/api/tickets/{id}` | Single ticket by ID |
-| POST | `/api/predict/category` | Predict ticket category |
-| POST | `/api/predict/priority` | Predict ticket priority |
-| GET | `/api/dashboard` | Dashboard statistics + model metrics |
+| POST | `/api/train` | Load dataset, train ML models |
+| GET | `/api/tickets` | Paginated ticket list |
+| GET | `/api/tickets/{id}` | Single ticket |
+| POST | `/api/predict` | Predict category, priority, severity |
+| GET | `/api/dashboard` | Full dashboard stats |
+| POST | `/api/knowledge/search` | FAISS semantic search |
+| POST | `/api/knowledge/ask` | RAG response |
+| POST | `/api/workflow/run` | Run 4-agent pipeline |
+| GET | `/api/workflow/history` | Workflow run history |
+| GET | `/api/workflow/stats` | Workflow monitoring stats |
+| GET | `/api/escalations` | Filtered escalation records |
+| GET | `/api/escalations/stats` | Escalation summary stats |
+| PATCH | `/api/escalations/{id}/status` | Update escalation status |
+| GET | `/api/jira/tickets` | Jira simulation records |
+| GET | `/api/emails` | Email records |
+| GET | `/api/integrations/status` | Integration health |
 | GET | `/health` | Health check |
 
-### Predict Request Body
-```json
-{
-  "subject": "Hardware issue",
-  "description": "My device stopped working after the update."
-}
+---
+
+## MongoDB Collections
+
+| Collection | Description |
+|------------|-------------|
+| `tickets` | All support tickets |
+| `workflow_runs` | Multi-agent pipeline execution records |
+| `escalations` | Escalated ticket records with status tracking |
+| `jira_tickets` | Simulated Jira records |
+| `emails` | Email notification records |
+| `jira_counter` | Auto-increment sequence for Jira IDs |
+
+---
+
+## ML Models
+
+- **Category model**: TF-IDF (bigrams) + Logistic Regression
+- **Priority model**: TF-IDF (bigrams) + Logistic Regression
+- **Knowledge Base**: FAISS + sentence-transformers (all-MiniLM-L6-v2)
+- Models saved to `backend/ml/saved_models/`
+- FAISS index saved to `backend/knowledge/faiss_store/`
+
+---
+
+## Multi-Agent Pipeline
+
+```
+DiagnosisAgent → RetrievalAgent → ResolutionAgent → EscalationAgent
+     ↓                ↓                 ↓                  ↓
+Category/Priority  FAISS Search    RAG Response      Auto-Resolve
+Severity           Top-K chunks    Solution Steps    or Escalate
+Confidence                         Prevention Tips   → Jira + Email
 ```
 
 ---
 
-## Dashboard Features
-- Total / Open / Closed ticket counts
-- Category & Priority model accuracy, precision, recall, F1
-- Bar chart: Tickets by Category
-- Pie chart: Priority Distribution
-- Pie chart: Solved vs Unsolved
-- Line chart: Monthly Ticket Trend
-- Recent Tickets table with pagination
+## Production Deployment
+
+### Backend (gunicorn + uvicorn workers)
+```bash
+gunicorn main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
+
+### Frontend
+```bash
+npm run build
+# Serve dist/ with nginx or any static host
+```
+
+### CORS
+Set `allow_origins` in `main.py` to your production frontend URL instead of `"*"`.
+
+### Security Checklist
+- Never commit `.env` files — covered by `.gitignore`
+- Rotate MongoDB credentials if ever exposed
+- Use Gmail App Passwords, not account passwords
+- Set `DEBUG=False` equivalent (remove `--reload` from uvicorn in production)
 
 ---
 
 ## Notes
-- Dataset columns are **auto-detected** — works with both `.csv` and `.xlsx` files placed in the `tickets/` folder.
-- Models use **TF-IDF (bigrams) + Logistic Regression** — no LLMs or embeddings.
-- The dataset descriptions contain template placeholders (`{product_purchased}`) making them nearly identical across categories, which limits text-classification accuracy. This is a dataset characteristic, not a code issue.
+- Dataset column names are auto-detected — works with `.csv` and `.xlsx`
+- Template placeholders in dataset descriptions limit ML accuracy — this is a dataset characteristic
+- All Jira and Email integrations are simulated locally in MongoDB
+- FAISS index is built once on startup and reused — no repeated loading

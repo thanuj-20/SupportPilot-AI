@@ -131,12 +131,25 @@ async def get_dashboard_stats() -> dict:
     ]
     monthly_trend = [{"month": d["_id"], "count": d["count"]} async for d in col.aggregate(trend_pipeline)]
 
+    # Workflow-based stats from workflow_runs
+    wf_col        = db["workflow_runs"]
+    auto_resolved = await wf_col.count_documents({"escalation.decision": "Auto-Resolve"})
+    escalated     = await wf_col.count_documents({"escalation.decision": "Escalate"})
+    wf_total      = await wf_col.count_documents({})
+
+    resolution_rate = round(auto_resolved / wf_total * 100, 1) if wf_total else 0
+    escalation_rate = round(escalated     / wf_total * 100, 1) if wf_total else 0
+
     metrics = load_metrics()
 
     return {
         "total":                   total,
         "open":                    open_c,
         "closed":                  closed,
+        "auto_resolved":           auto_resolved,
+        "escalated":               escalated,
+        "resolution_rate":         resolution_rate,
+        "escalation_rate":         escalation_rate,
         "category_distribution":   await _dist("category"),
         "priority_distribution":   await _dist("priority"),
         "severity_distribution":   await _dist("severity"),
