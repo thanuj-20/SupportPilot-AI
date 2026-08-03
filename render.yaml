@@ -1,0 +1,41 @@
+services:
+  # ── Backend ────────────────────────────────────────────────────────────
+  - type: web
+    name: supportpilot-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: bash render-build.sh
+    startCommand: gunicorn main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    envVars:
+      - key: MONGO_URI
+        sync: false          # set manually in Render dashboard
+      - key: DB_NAME
+        value: supportpilot
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false          # set to your frontend URL after deploy
+    healthCheckPath: /health
+
+  # ── Frontend ───────────────────────────────────────────────────────────
+  - type: web
+    name: supportpilot-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false          # set to https://supportpilot-backend.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
