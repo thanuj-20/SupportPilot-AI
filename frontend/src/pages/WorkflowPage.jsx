@@ -1,43 +1,75 @@
-import { useState } from "react";
-import { runWorkflow } from "../services/api";
+import { useState, useEffect, useRef } from "react";
+import { runWorkflow, getWorkflowStatus, getWorkflowById } from "../services/api";
 
 const AGENTS = [
-  { key: "diagnosis",  label: "Diagnosis Agent",   icon: "🔍", desc: "Predicts Category, Priority & Severity" },
-  { key: "retrieval",  label: "Retrieval Agent",   icon: "📚", desc: "Searches FAISS Knowledge Base" },
-  { key: "resolution", label: "Resolution Agent",  icon: "🛠", desc: "Generates Troubleshooting Response" },
-  { key: "escalation", label: "Escalation Agent",  icon: "🚦", desc: "Decides Auto-Resolve or Escalate" },
+  { key: "diagnosis",  label: "Diagnosis Agent",  icon: "🔍", desc: "Predicts Category, Priority & Severity",
+    runningStage: "diagnosis_running",  doneStage: "diagnosis_complete" },
+  { key: "retrieval",  label: "Retrieval Agent",  icon: "📚", desc: "Searches FAISS Knowledge Base",
+    runningStage: "retrieval_running",  doneStage: "retrieval_complete" },
+  { key: "resolution", label: "Resolution Agent", icon: "🛠", desc: "Generates Troubleshooting Response",
+    runningStage: "resolution_running", doneStage: "resolution_complete" },
+  { key: "escalation", label: "Escalation Agent", icon: "🚦", desc: "Decides Auto-Resolve or Escalate",
+    runningStage: "escalation_running", doneStage: "completed" },
 ];
 
-const CONF_COLOR  = { High: "text-green-400", Medium: "text-yellow-300", Low: "text-red-400" };
-const CONF_BAR    = { High: "bg-green-500",   Medium: "bg-yellow-500",   Low: "bg-red-500"   };
-const DEC_COLOR   = { "Auto-Resolve": "text-green-400", "Escalate": "text-red-400" };
-const DEC_BG      = { "Auto-Resolve": "bg-green-900/40 border-green-700", "Escalate": "bg-red-900/40 border-red-700" };
-const PRI_COLOR   = { critical:"text-red-400", high:"text-red-300", medium:"text-yellow-300", low:"text-green-400" };
+// Which stages count as "done" for each agent
+const DONE_STAGES = new Set([
+  "diagnosis_complete","retrieval_running","retrieval_complete",
+  "resolution_running","resolution_complete","escalation_running","completed","failed",
+]);
+const RETRIEVAL_DONE  = new Set(["retrieval_complete","resolution_running","resolution_complete","escalation_running","completed","failed"]);
+const RESOLUTION_DONE = new Set(["resolution_complete","escalation_running","completed","failed"]);
+const ESCALATION_DONE = new Set(["completed","failed"]);
 
-function AgentCard({ agent, state }) {
-  const isActive   = state === "running";
-  const isDone     = state === "done";
-  const isPending  = state === "pending";
+function agentCardState(agentKey, stage) {
+  if (stage === "queued" || !stage) return "pending";
+  if (agentKey === "diagnosis") {
+    if (stage === "diagnosis_running") return "running";
+    if (DONE_STAGES.has(stage))        return "done";
+  }
+  if (agentKey === "retrieval") {
+    if (stage === "retrieval_running")  return "running";
+    if (RETRIEVAL_DONE.has(stage))      return "done";
+  }
+  if (agentKey === "resolution") {
+    if (stage === "resolution_running") return "running";
+    if (RESOLUTION_DONE.has(stage))     return "done";
+  }
+  if (agentKey === "escalation") {
+    if (stage === "escalation_running") return "running";
+    if (ESCALATION_DONE.has(stage))     return "done";
+  }
+  return "pending";
+}
 
+const CONF_COLOR = { High: "text-green-400", Medium: "text-yellow-300", Low: "text-red-400" };
+const CONF_BAR   = { High: "bg-green-500",   Medium: "bg-yellow-500",   Low: "bg-red-500"   };
+const DEC_COLOR  = { "Auto-Resolve": "text-green-400", "Escalate": "text-red-400" };
+const DEC_BG     = { "Auto-Resolve": "bg-green-900/40 border-green-700", "Escalate": "bg-red-900/40 border-red-700" };
+const PRI_COLOR  = { critical:"text-red-400", high:"text-red-300", medium:"text-yellow-300", low:"text-green-400" };
+
+function AgentCard({ agent, state, label }) {
+  const isRunning = state === "running";
+  const isDone    = state === "done";
   return (
     <div className={`bg-gray-900 rounded-xl border p-4 transition-all duration-500 ${
-      isActive ? "border-blue-500 shadow-lg shadow-blue-900/30" :
-      isDone   ? "border-green-700" :
-                 "border-gray-700 opacity-50"
+      isRunning ? "border-blue-500 shadow-lg shadow-blue-900/30" :
+      isDone    ? "border-green-700" :
+                  "border-gray-700 opacity-50"
     }`}>
       <div className="flex items-center gap-3 mb-2">
         <span className="text-2xl">{agent.icon}</span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{agent.label}</p>
-          <p className="text-xs text-gray-400">{agent.desc}</p>
+          <p className="text-xs text-gray-400">{isRunning ? label : agent.desc}</p>
         </div>
         <div className="shrink-0">
-          {isActive  && <span className="w-3 h-3 rounded-full bg-blue-400 animate-pulse block" />}
+          {isRunning && <span className="w-3 h-3 rounded-full bg-blue-400 animate-pulse block" />}
           {isDone    && <span className="text-green-400 text-lg">✓</span>}
-          {isPending && <span className="w-3 h-3 rounded-full bg-gray-600 block" />}
+          {!isRunning && !isDone && <span className="w-3 h-3 rounded-full bg-gray-600 block" />}
         </div>
       </div>
-      {isActive && (
+      {isRunning && (
         <div className="w-full bg-gray-800 rounded-full h-1 mt-2">
           <div className="bg-blue-500 h-1 rounded-full animate-pulse" style={{ width: "60%" }} />
         </div>
@@ -48,18 +80,13 @@ function AgentCard({ agent, state }) {
 
 function LogEntry({ entry }) {
   const color = {
-    DiagnosisAgent:  "text-blue-400",
-    RetrievalAgent:  "text-purple-400",
-    ResolutionAgent: "text-yellow-300",
-    EscalationAgent: "text-orange-400",
-    Orchestrator:    "text-red-400",
+    DiagnosisAgent: "text-blue-400", RetrievalAgent: "text-purple-400",
+    ResolutionAgent: "text-yellow-300", EscalationAgent: "text-orange-400",
+    Orchestrator: "text-red-400",
   }[entry.agent] ?? "text-gray-400";
-
   return (
     <div className="flex gap-3 text-xs font-mono">
-      <span className="text-gray-500 shrink-0">
-        {new Date(entry.timestamp).toLocaleTimeString()}
-      </span>
+      <span className="text-gray-500 shrink-0">{new Date(entry.timestamp).toLocaleTimeString()}</span>
       <span className={`shrink-0 font-semibold ${color}`}>[{entry.agent}]</span>
       <span className="text-gray-300">{entry.message}</span>
     </div>
@@ -67,18 +94,24 @@ function LogEntry({ entry }) {
 }
 
 export default function WorkflowPage() {
-  const [subject,    setSubject]    = useState("");
-  const [body,       setBody]       = useState("");
-  const [userEmail,  setUserEmail]  = useState("");
-  const [running,    setRunning]    = useState(false);
-  const [agentState, setAgentState] = useState({});
-  const [result,     setResult]     = useState(null);
-  const [error,      setError]      = useState("");
+  const [subject,   setSubject]   = useState("");
+  const [body,      setBody]      = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [running,   setRunning]   = useState(false);
+  const [stage,     setStage]     = useState("");
+  const [stageLabel,setStageLabel]= useState("");
+  const [result,    setResult]    = useState(null);
+  const [error,     setError]     = useState("");
+  const pollRef = useRef(null);
 
-  const STEPS = ["diagnosis", "retrieval", "resolution", "escalation"];
-
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const isValidEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => () => stopPolling(), []);
 
   const handleRun = async () => {
     if (!subject.trim() || !body.trim()) return;
@@ -86,31 +119,74 @@ export default function WorkflowPage() {
       setError("Please enter a valid email address (e.g. you@example.com)");
       return;
     }
+
     setRunning(true);
     setError("");
     setResult(null);
-    setAgentState({});
+    setStage("queued");
+    setStageLabel("Queued");
+    stopPolling();
 
+    let workflowId;
     try {
-      // Wait for real API response first
-      const res  = await runWorkflow(subject, body, null, userEmail || null);
-      const data = res.data;
+      // Returns immediately with workflow_id
+      const { data } = await runWorkflow(subject, body, null, userEmail || null);
+      workflowId = data.workflow_id;
+      setStage("diagnosis_running");
+      setStageLabel("Running Diagnosis Agent...");
+    } catch (e) {
+      setError(e.response?.data?.detail || "Failed to start workflow. Check backend connection.");
+      setRunning(false);
+      setStage("");
+      return;
+    }
 
-      // Replay animation sequentially AFTER data is ready
-      for (let i = 0; i < STEPS.length; i++) {
-        setAgentState(s => ({ ...s, [STEPS[i]]: "running" }));
-        await sleep(700);
-        setAgentState(s => ({ ...s, [STEPS[i]]: "done" }));
-        await sleep(150);
+    // Poll every 2s
+    const TIMEOUT_MS = 180_000; // 3 min hard stop
+    const startedAt  = Date.now();
+
+    pollRef.current = setInterval(async () => {
+      // Hard timeout guard
+      if (Date.now() - startedAt > TIMEOUT_MS) {
+        stopPolling();
+        setError("Workflow timed out after 3 minutes. Check backend logs.");
+        setRunning(false);
+        setStage("failed");
+        return;
       }
 
-      setResult(data);
-    } catch (e) {
-      setError(e.response?.data?.detail || "Workflow failed. Ensure models are trained.");
-      setAgentState({});
-    } finally {
-      setRunning(false);
-    }
+      try {
+        const { data: status } = await getWorkflowStatus(workflowId);
+        setStage(status.stage);
+        setStageLabel(status.label);
+
+        if (status.failed) {
+          stopPolling();
+          setError(status.error || "Workflow failed.");
+          setRunning(false);
+          return;
+        }
+
+        if (status.completed) {
+          stopPolling();
+          // Fetch full result from in-memory state (fast) or MongoDB
+          try {
+            const { data: full } = await getWorkflowById(workflowId);
+            setResult(full);
+          } catch {
+            setError("Workflow completed but result could not be loaded.");
+          }
+          setRunning(false);
+        }
+      } catch (e) {
+        // Don't stop on transient poll errors — only stop on 404
+        if (e.response?.status === 404) {
+          stopPolling();
+          setError("Workflow state lost. Please try again.");
+          setRunning(false);
+        }
+      }
+    }, 2000);
   };
 
   const diag = result?.diagnosis;
@@ -122,7 +198,6 @@ export default function WorkflowPage() {
     <div className="bg-gray-950 min-h-screen">
     <div className="p-6 space-y-6 max-w-5xl mx-auto pb-10">
 
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">Multi-Agent Workflow</h1>
         <p className="text-gray-400 text-sm mt-1">
@@ -130,12 +205,28 @@ export default function WorkflowPage() {
         </p>
       </div>
 
-      {/* Agent pipeline cards */}
+      {/* Agent pipeline cards — driven by real backend stage */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {AGENTS.map(a => (
-          <AgentCard key={a.key} agent={a} state={agentState[a.key] ?? "pending"} />
+          <AgentCard
+            key={a.key}
+            agent={a}
+            state={agentCardState(a.key, stage)}
+            label={stageLabel}
+          />
         ))}
       </div>
+
+      {/* Stage status bar */}
+      {running && (
+        <div className="bg-gray-900 border border-blue-800 rounded-xl px-4 py-3 flex items-center gap-3">
+          <svg className="w-4 h-4 animate-spin text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          <span className="text-sm text-blue-300 font-medium">{stageLabel}</span>
+        </div>
+      )}
 
       {/* Input form */}
       <div className="bg-gray-900 rounded-xl border border-gray-700 p-6 space-y-4">
@@ -166,9 +257,7 @@ export default function WorkflowPage() {
           <input
             type="email"
             className={`w-full bg-gray-800 border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-              userEmail.trim() && !isValidEmail(userEmail.trim())
-                ? "border-red-500"
-                : "border-gray-600"
+              userEmail.trim() && !isValidEmail(userEmail.trim()) ? "border-red-500" : "border-gray-600"
             }`}
             placeholder="you@example.com"
             value={userEmail}
@@ -177,9 +266,6 @@ export default function WorkflowPage() {
           {userEmail.trim() && !isValidEmail(userEmail.trim()) && (
             <p className="text-xs text-red-400 mt-1">⚠ Invalid email format</p>
           )}
-          <p className="text-xs text-gray-500 mt-1">
-            If resolved → you'll receive a resolution email. If escalated → you'll receive a processing update.
-          </p>
         </div>
         <button
           onClick={handleRun}
@@ -192,29 +278,28 @@ export default function WorkflowPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
               </svg>
-              Running Agents…
+              {stageLabel || "Running Agents…"}
             </>
           ) : "▶ Run Multi-Agent Workflow"}
         </button>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-4 py-3 text-sm flex items-center gap-2">
           <span>⚠</span>{error}
         </div>
       )}
 
-      {/* Results */}
       {result && (
-        <div className="space-y-4 animate-fade-in">
-
-          {/* Workflow status bar */}
+        <div className="space-y-4">
           <div className="bg-gray-900 rounded-xl border border-green-700 px-5 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-green-400">✓</span>
               <span className="text-sm font-semibold text-gray-200">Workflow Completed</span>
               <span className="text-xs text-gray-500 font-mono ml-2">{result.workflow_id?.slice(0,8)}</span>
+              {result.total_duration_ms && (
+                <span className="text-xs text-gray-500 ml-1">({(result.total_duration_ms/1000).toFixed(1)}s)</span>
+              )}
             </div>
             <div className="flex items-center gap-4 text-xs text-gray-400">
               <span>Jira: <span className="text-blue-400 font-semibold">{result.jira?.jira_id}</span></span>
@@ -222,12 +307,10 @@ export default function WorkflowPage() {
             </div>
           </div>
 
-          {/* 4-column result grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
             {/* Diagnosis */}
             <div className="bg-gray-900 rounded-xl border border-gray-700 p-5 space-y-3">
-              <h2 className="text-xs font-semibold text-blue-400 uppercase tracking-wide flex items-center gap-2">🔍 Diagnosis</h2>
+              <h2 className="text-xs font-semibold text-blue-400 uppercase tracking-wide">🔍 Diagnosis</h2>
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: "Category", value: diag?.category },
@@ -248,7 +331,7 @@ export default function WorkflowPage() {
 
             {/* Resolution */}
             <div className="bg-gray-900 rounded-xl border border-gray-700 p-5 space-y-3">
-              <h2 className="text-xs font-semibold text-yellow-300 uppercase tracking-wide flex items-center gap-2">🛠 Resolution</h2>
+              <h2 className="text-xs font-semibold text-yellow-300 uppercase tracking-wide">🛠 Resolution</h2>
               <div className="space-y-1">
                 <p className="text-xs text-gray-400">Issue</p>
                 <p className="text-sm text-white font-medium">{res?.issue}</p>
@@ -310,7 +393,6 @@ export default function WorkflowPage() {
             </div>
           </div>
 
-          {/* Prevention tips */}
           {res?.prevention_tips?.length > 0 && (
             <div className="bg-gray-900 rounded-xl border border-gray-700 p-5">
               <h2 className="text-xs font-semibold text-teal-400 uppercase tracking-wide mb-3">🛡 Prevention Tips</h2>
@@ -324,7 +406,6 @@ export default function WorkflowPage() {
             </div>
           )}
 
-          {/* Execution log */}
           <div className="bg-gray-900 rounded-xl border border-gray-700 p-5">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">📜 Execution Log</h2>
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
@@ -332,15 +413,14 @@ export default function WorkflowPage() {
             </div>
           </div>
 
-          {/* Jira + Email status */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-gray-900 rounded-xl border border-blue-800 p-5 space-y-2">
               <h2 className="text-xs font-semibold text-blue-400 uppercase tracking-wide">🎫 Jira Ticket Created</h2>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Jira ID",  value: result.jira?.jira_id },
-                  { label: "Status",   value: result.jira?.status },
-                  { label: "Team",     value: result.jira?.assigned_team },
+                  { label: "Jira ID",    value: result.jira?.jira_id },
+                  { label: "Status",     value: result.jira?.status },
+                  { label: "Team",       value: result.jira?.assigned_team },
                   { label: "Escalation", value: result.jira?.escalation_status },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-gray-800 rounded-lg p-2">
@@ -381,7 +461,6 @@ export default function WorkflowPage() {
               </div>
             </div>
           </div>
-
         </div>
       )}
     </div>
@@ -390,11 +469,10 @@ export default function WorkflowPage() {
 }
 
 function ConfMini({ label, value }) {
-  const pct = Math.round((value ?? 0) * 100);
   return (
     <div className="bg-gray-800 rounded-lg p-3">
       <p className="text-xs text-gray-400 mb-1">{label}</p>
-      <p className="text-sm font-bold text-white">{pct}%</p>
+      <p className="text-sm font-bold text-white">{Math.round((value ?? 0) * 100)}%</p>
     </div>
   );
 }
