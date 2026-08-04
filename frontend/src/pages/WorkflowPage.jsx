@@ -1,46 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import { runWorkflow, getWorkflowStatus, getWorkflowById } from "../services/api";
+import { runWorkflow } from "../services/api";
 
 const AGENTS = [
-  { key: "diagnosis",  label: "Diagnosis Agent",  icon: "🔍", desc: "Predicts Category, Priority & Severity",
-    runningStage: "diagnosis_running",  doneStage: "diagnosis_complete" },
-  { key: "retrieval",  label: "Retrieval Agent",  icon: "📚", desc: "Searches FAISS Knowledge Base",
-    runningStage: "retrieval_running",  doneStage: "retrieval_complete" },
-  { key: "resolution", label: "Resolution Agent", icon: "🛠", desc: "Generates Troubleshooting Response",
-    runningStage: "resolution_running", doneStage: "resolution_complete" },
-  { key: "escalation", label: "Escalation Agent", icon: "🚦", desc: "Decides Auto-Resolve or Escalate",
-    runningStage: "escalation_running", doneStage: "completed" },
+  { key: "diagnosis",  label: "Diagnosis Agent",  icon: "🔍", desc: "Predicts Category, Priority & Severity" },
+  { key: "retrieval",  label: "Retrieval Agent",  icon: "📚", desc: "Searches FAISS Knowledge Base" },
+  { key: "resolution", label: "Resolution Agent", icon: "🛠", desc: "Generates Troubleshooting Response" },
+  { key: "escalation", label: "Escalation Agent", icon: "🚦", desc: "Decides Auto-Resolve or Escalate" },
 ];
 
-// Which stages count as "done" for each agent
-const DONE_STAGES = new Set([
-  "diagnosis_complete","retrieval_running","retrieval_complete",
-  "resolution_running","resolution_complete","escalation_running","completed","failed",
-]);
-const RETRIEVAL_DONE  = new Set(["retrieval_complete","resolution_running","resolution_complete","escalation_running","completed","failed"]);
-const RESOLUTION_DONE = new Set(["resolution_complete","escalation_running","completed","failed"]);
-const ESCALATION_DONE = new Set(["completed","failed"]);
-
-function agentCardState(agentKey, stage) {
-  if (stage === "queued" || !stage) return "pending";
-  if (agentKey === "diagnosis") {
-    if (stage === "diagnosis_running") return "running";
-    if (DONE_STAGES.has(stage))        return "done";
-  }
-  if (agentKey === "retrieval") {
-    if (stage === "retrieval_running")  return "running";
-    if (RETRIEVAL_DONE.has(stage))      return "done";
-  }
-  if (agentKey === "resolution") {
-    if (stage === "resolution_running") return "running";
-    if (RESOLUTION_DONE.has(stage))     return "done";
-  }
-  if (agentKey === "escalation") {
-    if (stage === "escalation_running") return "running";
-    if (ESCALATION_DONE.has(stage))     return "done";
-  }
+// stage index: 0=idle, 1=diagnosis, 2=retrieval, 3=resolution, 4=escalation, 5=done
+function agentCardState(agentIndex, activeIndex) {
+  if (activeIndex === 0) return "pending";
+  if (agentIndex + 1 === activeIndex) return "running";
+  if (agentIndex + 1 < activeIndex)  return "done";
   return "pending";
 }
+
+const STAGE_LABELS = ["", "Running Diagnosis Agent...", "Running Retrieval Agent...", "Running Resolution Agent...", "Running Escalation Agent...", "Completed"];
 
 const CONF_COLOR = { High: "text-green-400", Medium: "text-yellow-300", Low: "text-red-400" };
 const CONF_BAR   = { High: "bg-green-500",   Medium: "bg-yellow-500",   Low: "bg-red-500"   };
@@ -94,24 +70,22 @@ function LogEntry({ entry }) {
 }
 
 export default function WorkflowPage() {
-  const [subject,   setSubject]   = useState("");
-  const [body,      setBody]      = useState("");
-  const [userEmail, setUserEmail] = useState("");
-  const [running,   setRunning]   = useState(false);
-  const [stage,     setStage]     = useState("");
-  const [stageLabel,setStageLabel]= useState("");
-  const [result,    setResult]    = useState(null);
-  const [error,     setError]     = useState("");
-  const pollRef = useRef(null);
+  const [subject,     setSubject]     = useState("");
+  const [body,        setBody]        = useState("");
+  const [userEmail,   setUserEmail]   = useState("");
+  const [running,     setRunning]     = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0); // 0=idle,1-4=agent,5=done
+  const [result,      setResult]      = useState(null);
+  const [error,       setError]       = useState("");
+  const tickerRef = useRef(null);
 
   const isValidEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-  const stopPolling = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  const stopTicker = () => {
+    if (tickerRef.current) { clearInterval(tickerRef.current); tickerRef.current = null; }
   };
 
-  // Cleanup on unmount
-  useEffect(() => () => stopPolling(), []);
+  useEffect(() => () => stopTicker(), []);
 
   const handleRun = async () => {
     if (!subject.trim() || !body.trim()) return;
@@ -123,70 +97,26 @@ export default function WorkflowPage() {
     setRunning(true);
     setError("");
     setResult(null);
-    setStage("queued");
-    setStageLabel("Queued");
-    stopPolling();
+    setActiveIndex(1); // start at Diagnosis
+    stopTicker();
 
-    let workflowId;
-    try {
-      // Returns immediately with workflow_id
-      const { data } = await runWorkflow(subject, body, null, userEmail || null);
-      workflowId = data.workflow_id;
-      setStage("diagnosis_running");
-      setStageLabel("Running Diagnosis Agent...");
-    } catch (e) {
-      setError(e.response?.data?.detail || "Failed to start workflow. Check backend connection.");
-      setRunning(false);
-      setStage("");
-      return;
-    }
-
-    // Poll every 2s
-    const TIMEOUT_MS = 180_000; // 3 min hard stop
-    const startedAt  = Date.now();
-
-    pollRef.current = setInterval(async () => {
-      // Hard timeout guard
-      if (Date.now() - startedAt > TIMEOUT_MS) {
-        stopPolling();
-        setError("Workflow timed out after 3 minutes. Check backend logs.");
-        setRunning(false);
-        setStage("failed");
-        return;
-      }
-
-      try {
-        const { data: status } = await getWorkflowStatus(workflowId);
-        setStage(status.stage);
-        setStageLabel(status.label);
-
-        if (status.failed) {
-          stopPolling();
-          setError(status.error || "Workflow failed.");
-          setRunning(false);
-          return;
-        }
-
-        if (status.completed) {
-          stopPolling();
-          // Fetch full result from in-memory state (fast) or MongoDB
-          try {
-            const { data: full } = await getWorkflowById(workflowId);
-            setResult(full);
-          } catch {
-            setError("Workflow completed but result could not be loaded.");
-          }
-          setRunning(false);
-        }
-      } catch (e) {
-        // Don't stop on transient poll errors — only stop on 404
-        if (e.response?.status === 404) {
-          stopPolling();
-          setError("Workflow state lost. Please try again.");
-          setRunning(false);
-        }
-      }
+    // Advance animation every ~2s while backend is running
+    tickerRef.current = setInterval(() => {
+      setActiveIndex(prev => (prev < 4 ? prev + 1 : prev));
     }, 2000);
+
+    try {
+      const { data } = await runWorkflow(subject, body, null, userEmail || null);
+      stopTicker();
+      setActiveIndex(5); // all done
+      setResult(data);
+    } catch (e) {
+      stopTicker();
+      setActiveIndex(0);
+      setError(e.response?.data?.detail || "Failed to run workflow. Check backend connection.");
+    } finally {
+      setRunning(false);
+    }
   };
 
   const diag = result?.diagnosis;
@@ -207,12 +137,12 @@ export default function WorkflowPage() {
 
       {/* Agent pipeline cards — driven by real backend stage */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {AGENTS.map(a => (
+        {AGENTS.map((a, i) => (
           <AgentCard
             key={a.key}
             agent={a}
-            state={agentCardState(a.key, stage)}
-            label={stageLabel}
+            state={agentCardState(i, activeIndex)}
+            label={STAGE_LABELS[activeIndex]}
           />
         ))}
       </div>
@@ -224,7 +154,7 @@ export default function WorkflowPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
-          <span className="text-sm text-blue-300 font-medium">{stageLabel}</span>
+          <span className="text-sm text-blue-300 font-medium">{STAGE_LABELS[activeIndex]}</span>
         </div>
       )}
 
@@ -278,7 +208,7 @@ export default function WorkflowPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
               </svg>
-              {stageLabel || "Running Agents…"}
+              {STAGE_LABELS[activeIndex] || "Running Agents…"}
             </>
           ) : "▶ Run Multi-Agent Workflow"}
         </button>

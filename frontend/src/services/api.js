@@ -17,9 +17,8 @@ export const ragKnowledge    = (query, top_k=5) => API.post("/knowledge/ask",   
 
 // Milestone 3 — Multi-Agent Workflow
 export const runWorkflow        = (subject, body, ticket_id=null, user_email=null) => API.post("/workflow/run", { subject, body, ticket_id, user_email });
-export const getWorkflowStatus  = (workflow_id) => API.get(`/workflow/${workflow_id}/status`);
-export const getWorkflowHistory = (skip=0, limit=20)              => API.get("/workflow/history", { params: { skip, limit } });
-export const getWorkflowById    = (id)                            => API.get(`/workflow/${id}`);
+export const getWorkflowHistory = (skip=0, limit=20) => API.get("/workflow/history", { params: { skip, limit } });
+export const getWorkflowById    = (id)               => API.get(`/workflow/${id}`);
 
 // Milestone 3 — Jira Integration
 export const getJiraTickets = (skip=0, limit=50) => API.get("/jira/tickets", { params: { skip, limit } });
