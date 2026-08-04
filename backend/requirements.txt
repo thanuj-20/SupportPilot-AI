@@ -1,7 +1,5 @@
-# ── PyTorch CPU-only (must come before sentence-transformers) ──────────────
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.2.2+cpu
-torchvision==0.17.2+cpu
+# torch is installed separately in render-build.sh (CPU-only wheel)
+# DO NOT add torch here — sentence-transformers will use the already-installed CPU torch
 
 # ── Core API ───────────────────────────────────────────────────────────────
 fastapi==0.115.0
@@ -22,6 +20,9 @@ openpyxl==3.1.2
 numpy==1.26.4
 
 # ── Embeddings + FAISS ─────────────────────────────────────────────────────
+transformers==4.39.3
+tokenizers==0.15.2
+huggingface-hub==0.22.2
 sentence-transformers==2.7.0
 faiss-cpu==1.7.4
 
