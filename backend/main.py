@@ -93,6 +93,11 @@ app.include_router(workflow_router)
 app.include_router(escalation_router)
 
 
+@app.get("/")
+async def root():
+    return {"status": "online", "service": "SupportPilot AI API"}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -100,11 +105,17 @@ async def health():
 
 @app.get("/api/health")
 async def api_health():
-    from knowledge.faiss_index import load_status
+    from knowledge.faiss_index import load_status, is_ready
     faiss_status = load_status()
-    all_ready = all(_startup_status.values())
+    kb_ready = is_ready()
+    components = {
+        **_startup_status,
+        "knowledge_base": kb_ready,
+    }
+    all_ready = all(components.values())
     return {
         "status":     "ok" if all_ready else "degraded",
-        "components": _startup_status,
+        "version":    "4.0.0",
+        "components": components,
         "faiss":      faiss_status,
     }
