@@ -55,7 +55,8 @@ class WorkflowRequest(BaseModel):
 async def run_workflow_endpoint(req: WorkflowRequest):
     ticket_id = req.ticket_id or str(uuid.uuid4())
     try:
-        result = run_workflow(ticket_id, req.subject, req.body)
+        import asyncio
+        result = await asyncio.to_thread(run_workflow, ticket_id, req.subject, req.body)
 
         if result["status"] == "failed":
             raise HTTPException(status_code=500, detail=result.get("error", "Workflow failed"))

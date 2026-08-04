@@ -31,7 +31,7 @@ async def kb_search(req: SearchRequest):
     if not is_ready():
         raise HTTPException(status_code=503, detail="Knowledge base index is not ready.")
     try:
-        results = search_knowledge(req.query.strip(), req.top_k)
+        results = await search_knowledge(req.query.strip(), req.top_k)
         return {"query": req.query, "results": results}
     except Exception as e:
         logger.error(f"[KB] Search failed: {e}")
@@ -45,7 +45,7 @@ async def kb_ask(req: SearchRequest):
     if not is_ready():
         raise HTTPException(status_code=503, detail="Knowledge base index is not ready.")
     try:
-        chunks   = search_knowledge(req.query.strip(), max(req.top_k, 5))
+        chunks   = await search_knowledge(req.query.strip(), max(req.top_k, 5))
         response = generate_response(req.query.strip(), chunks)
         return {"query": req.query, "response": response}
     except Exception as e:
