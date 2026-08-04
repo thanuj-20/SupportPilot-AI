@@ -1,6 +1,10 @@
 import axios from "axios";
 
-const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api" });
+const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const API  = axios.create({ baseURL: BASE });
+
+// Separate instance for workflow — longer timeout for SentenceTransformer cold start
+const WORKFLOW_API = axios.create({ baseURL: BASE, timeout: 110000 });
 
 // Milestone 1
 export const trainModels    = ()                  => API.post("/train");
@@ -16,7 +20,7 @@ export const searchKnowledge = (query, top_k=5) => API.post("/knowledge/search",
 export const ragKnowledge    = (query, top_k=5) => API.post("/knowledge/ask",    { query, top_k });
 
 // Milestone 3 — Multi-Agent Workflow
-export const runWorkflow        = (subject, body, ticket_id=null, user_email=null) => API.post("/workflow/run", { subject, body, ticket_id, user_email });
+export const runWorkflow        = (subject, body, ticket_id=null, user_email=null) => WORKFLOW_API.post("/workflow/run", { subject, body, ticket_id, user_email });
 export const getWorkflowHistory = (skip=0, limit=20) => API.get("/workflow/history", { params: { skip, limit } });
 export const getWorkflowById    = (id)               => API.get(`/workflow/${id}`);
 

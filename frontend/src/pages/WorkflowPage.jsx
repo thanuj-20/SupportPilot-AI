@@ -88,6 +88,7 @@ export default function WorkflowPage() {
   useEffect(() => () => stopTicker(), []);
 
   const handleRun = async () => {
+    if (running) return; // prevent duplicate execution
     if (!subject.trim() || !body.trim()) return;
     if (userEmail.trim() && !isValidEmail(userEmail.trim())) {
       setError("Please enter a valid email address (e.g. you@example.com)");
@@ -97,10 +98,9 @@ export default function WorkflowPage() {
     setRunning(true);
     setError("");
     setResult(null);
-    setActiveIndex(1); // start at Diagnosis
+    setActiveIndex(1);
     stopTicker();
 
-    // Advance animation every ~2s while backend is running
     tickerRef.current = setInterval(() => {
       setActiveIndex(prev => (prev < 4 ? prev + 1 : prev));
     }, 2000);
@@ -108,12 +108,18 @@ export default function WorkflowPage() {
     try {
       const { data } = await runWorkflow(subject, body, null, userEmail || null);
       stopTicker();
-      setActiveIndex(5); // all done
+      setActiveIndex(5);
       setResult(data);
     } catch (e) {
       stopTicker();
       setActiveIndex(0);
-      setError(e.response?.data?.detail || "Failed to run workflow. Check backend connection.");
+      if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
+        setError("Workflow timed out. The server may be under load — please try again.");
+      } else if (!e.response) {
+        setError("Cannot reach backend. Check CORS configuration or backend status.");
+      } else {
+        setError(e.response?.data?.detail || `Backend error (${e.response.status}). Please try again.`);
+      }
     } finally {
       setRunning(false);
     }

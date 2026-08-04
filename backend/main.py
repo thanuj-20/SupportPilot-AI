@@ -92,15 +92,24 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-_raw = os.getenv("ALLOWED_ORIGINS", "*").strip()
-_origins = ["*"] if _raw == "*" else [o.strip().rstrip("/") for o in _raw.split(",") if o.strip()]
+_raw = os.getenv("ALLOWED_ORIGINS", "").strip()
+if not _raw or _raw == "*":
+    # No specific origins configured — allow all (credentials disabled for wildcard)
+    _origins = ["*"]
+    _allow_credentials = False
+else:
+    _origins = [o.strip().rstrip("/") for o in _raw.split(",") if o.strip()]
+    _allow_credentials = True
+
+logger.info(f"[CORS] Allowed origins: {_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_credentials=True,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(ticket_router)
