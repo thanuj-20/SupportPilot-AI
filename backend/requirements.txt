@@ -1,5 +1,5 @@
-# torch is installed separately in render-build.sh (CPU-only wheel)
-# DO NOT add torch here — sentence-transformers will use the already-installed CPU torch
+# torch/torchaudio installed by render-build.sh via CPU wheel index
+# DO NOT add torch here — pip would pull CUDA build from PyPI
 
 # ── Core API ───────────────────────────────────────────────────────────────
 fastapi==0.115.0
@@ -19,10 +19,10 @@ pandas==2.2.3
 openpyxl==3.1.2
 numpy==1.26.4
 
-# ── Embeddings + FAISS ─────────────────────────────────────────────────────
-transformers==4.39.3
-tokenizers==0.15.2
+# ── Embeddings + FAISS (torch already installed before this runs) ──────────
 huggingface-hub==0.22.2
+tokenizers==0.15.2
+transformers==4.39.3
 sentence-transformers==2.7.0
 faiss-cpu==1.7.4
 

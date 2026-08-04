@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from database.connection import connect_db, close_db
 from routes.ticket_routes import router as ticket_router
 from routes.knowledge_routes import router as knowledge_router
@@ -21,68 +22,94 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Track startup component status for /api/health
-_startup_status = {
-    "mongodb":          False,
-    "ml_models":        False,
+# Component readiness — populated during lifespan startup
+_status = {
+    "mongodb":              False,
+    "category_model":       False,
+    "priority_model":       False,
     "sentence_transformer": False,
-    "faiss":            False,
+    "faiss":                False,
+    "knowledge_base":       False,
 }
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    t_total = time.perf_counter()
+    import asyncio
+    t0 = time.perf_counter()
 
     # ── MongoDB ───────────────────────────────────────────────────────────
-    await connect_db()
-    _startup_status["mongodb"] = True
-    logger.info("[Startup] MongoDB ready")
+    try:
+        await connect_db()
+        _status["mongodb"] = True
+        logger.info("[Startup] MongoDB ready")
+    except Exception as e:
+        logger.error(f"[Startup] MongoDB failed: {e}")
 
-    # ── ML models (check saved models exist) ─────────────────────────────
-    import os as _os
-    models_dir = _os.path.join(_os.path.dirname(__file__), "ml", "saved_models")
-    if _os.path.exists(_os.path.join(models_dir, "category_model.pkl")):
-        _startup_status["ml_models"] = True
-        logger.info("[Startup] ML models ready")
+    # ── ML models ─────────────────────────────────────────────────────────
+    base = os.path.dirname(__file__)
+    cat_path = os.path.join(base, "ml", "saved_models", "category_model.pkl")
+    pri_path = os.path.join(base, "ml", "saved_models", "priority_model.pkl")
+    if os.path.exists(cat_path):
+        _status["category_model"] = True
+        logger.info("[Startup] category_model ready")
     else:
-        logger.warning("[Startup] ML models not found — run train_offline.py")
+        logger.warning("[Startup] category_model not found")
+    if os.path.exists(pri_path):
+        _status["priority_model"] = True
+        logger.info("[Startup] priority_model ready")
+    else:
+        logger.warning("[Startup] priority_model not found")
 
     # ── FAISS index ───────────────────────────────────────────────────────
-    load_index()
-    from knowledge.faiss_index import is_ready
-    if not is_ready():
-        logger.info("[Startup] No FAISS index found — building from knowledge_base/…")
-        from knowledge.search import index_knowledge_base
-        index_knowledge_base()
-    _startup_status["faiss"] = is_ready()
-    logger.info(f"[Startup] FAISS ready: {_startup_status['faiss']}")
+    try:
+        load_index()
+        from knowledge.faiss_index import is_ready
+        if not is_ready():
+            logger.info("[Startup] No FAISS index — building from knowledge_base/")
+            from knowledge.search import index_knowledge_base
+            index_knowledge_base()
+        _status["faiss"] = is_ready()
+        _status["knowledge_base"] = is_ready()
+        logger.info(f"[Startup] FAISS ready: {_status['faiss']}")
+    except Exception as e:
+        logger.error(f"[Startup] FAISS failed: {e}")
 
-    # ── SentenceTransformer warmup (blocking but happens before requests) ─
-    import asyncio
-    t_model = time.perf_counter()
-    logger.info("[Startup] Loading SentenceTransformer model…")
+    # ── SentenceTransformer warmup ────────────────────────────────────────
     try:
         from knowledge.embedder import warmup_model
+        t_model = time.perf_counter()
+        logger.info("[Startup] Loading SentenceTransformer…")
         await asyncio.to_thread(warmup_model)
-        _startup_status["sentence_transformer"] = True
+        _status["sentence_transformer"] = True
         logger.info(f"[Startup] SentenceTransformer ready in {round((time.perf_counter()-t_model)*1000)}ms")
     except Exception as e:
-        logger.error(f"[Startup] SentenceTransformer failed to load: {e}")
+        logger.error(f"[Startup] SentenceTransformer failed: {e}")
 
-    logger.info(f"[Startup] All components ready in {round((time.perf_counter()-t_total)*1000)}ms")
+    logger.info(f"[Startup] All components ready in {round((time.perf_counter()-t0)*1000)}ms — status: {_status}")
     yield
     await close_db()
 
 
-app = FastAPI(title="SupportPilot API", version="4.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="SupportPilot API",
+    version="4.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
-_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
-allowed_origins = [o.strip() for o in _origins_env.split(",")] if _origins_env != "*" else ["*"]
+# ── CORS ──────────────────────────────────────────────────────────────────────
+_raw = os.getenv("ALLOWED_ORIGINS", "*").strip()
+if _raw == "*":
+    _origins = ["*"]
+else:
+    _origins = [o.strip().rstrip("/") for o in _raw.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -93,9 +120,9 @@ app.include_router(workflow_router)
 app.include_router(escalation_router)
 
 
-@app.get("/")
+@app.get("/", response_class=PlainTextResponse)
 async def root():
-    return {"status": "online", "service": "SupportPilot AI API"}
+    return "SupportPilot AI Backend Running"
 
 
 @app.get("/health")
@@ -106,16 +133,14 @@ async def health():
 @app.get("/api/health")
 async def api_health():
     from knowledge.faiss_index import load_status, is_ready
-    faiss_status = load_status()
-    kb_ready = is_ready()
-    components = {
-        **_startup_status,
-        "knowledge_base": kb_ready,
-    }
-    all_ready = all(components.values())
+    faiss_meta = load_status()
+    # Refresh live FAISS state without rebuilding
+    _status["faiss"] = is_ready()
+    _status["knowledge_base"] = is_ready()
+    all_ready = all(_status.values())
     return {
         "status":     "ok" if all_ready else "degraded",
         "version":    "4.0.0",
-        "components": components,
-        "faiss":      faiss_status,
+        "components": dict(_status),
+        "faiss":      faiss_meta,
     }
