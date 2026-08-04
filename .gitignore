@@ -12,10 +12,9 @@ venv/
 env/
 
 # ── ML / FAISS binaries ───────────────────────────────────────────────────
-*.pkl
+# Committed so Render skips expensive rebuild on every deploy
+# Only re-commit when models are retrained or index is rebuilt
 *.joblib
-*.faiss
-# Allow metrics.json (non-binary, safe to track)
 !backend/ml/saved_models/metrics.json
 
 # ── Logs ──────────────────────────────────────────────────────────────────

@@ -1,15 +1,30 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.29.0
-pymongo>=4.7.2
-motor>=3.4.0
-pandas>=2.0.0
-openpyxl>=3.1.2
-scikit-learn>=1.4.0
-joblib>=1.4.0
-python-dotenv>=1.0.0
-python-multipart>=0.0.9
-sentence-transformers>=2.7.0
-faiss-cpu>=1.7.4
-pymupdf>=1.23.0
-python-docx>=0.8.11
-gunicorn>=22.0.0
+# ── PyTorch CPU-only (must come before sentence-transformers) ──────────────
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
+
+# ── Core API ───────────────────────────────────────────────────────────────
+fastapi==0.115.0
+uvicorn[standard]==0.29.0
+gunicorn==22.0.0
+python-multipart==0.0.9
+python-dotenv==1.0.0
+
+# ── Database ───────────────────────────────────────────────────────────────
+pymongo==4.7.2
+motor==3.4.0
+
+# ── ML ─────────────────────────────────────────────────────────────────────
+scikit-learn==1.4.2
+joblib==1.4.2
+pandas==2.2.3
+openpyxl==3.1.2
+numpy==1.26.4
+
+# ── Embeddings + FAISS ─────────────────────────────────────────────────────
+sentence-transformers==2.7.0
+faiss-cpu==1.7.4
+
+# ── Document parsing ───────────────────────────────────────────────────────
+pymupdf==1.23.26
+python-docx==1.1.2
