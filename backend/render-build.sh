@@ -26,11 +26,26 @@ import sklearn, joblib, pandas, numpy
 import sentence_transformers, faiss
 import torch
 print('fastapi', fastapi.__version__)
+print('sklearn', sklearn.__version__)
 print('sentence_transformers', sentence_transformers.__version__)
 print('torch', torch.__version__)
 print('faiss OK')
-print('sklearn', sklearn.__version__)
 print('All imports OK')
+"
+
+echo "==> Step 5b: Validate ML model inference"
+python -c "
+import sys
+sys.path.insert(0, '.')
+from ml.preprocessor import clean_text
+from ml.trainer import load_model
+probe = clean_text('vpn problem not connecting')
+cat = load_model('category')
+p = cat.predict_proba([probe])
+print('category_model inference OK:', cat.classes_[p[0].argmax()], round(float(p[0].max()), 4))
+pri = load_model('priority')
+q = pri.predict_proba([probe])
+print('priority_model inference OK:', pri.classes_[q[0].argmax()], round(float(q[0].max()), 4))
 "
 
 echo "==> Step 6: Check ML models (skip training if committed artifacts exist)"

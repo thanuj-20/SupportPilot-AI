@@ -46,20 +46,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"[Startup] MongoDB failed: {e}")
 
-    # ── ML models ─────────────────────────────────────────────────────────
-    base = os.path.dirname(__file__)
-    cat_path = os.path.join(base, "ml", "saved_models", "category_model.pkl")
-    pri_path = os.path.join(base, "ml", "saved_models", "priority_model.pkl")
-    if os.path.exists(cat_path):
+    # ── ML models — validate with actual inference, not just file existence ──
+    try:
+        from ml.trainer import load_model
+        from ml.preprocessor import clean_text
+        _probe = clean_text("vpn problem not connecting")
+        cat_m = load_model("category")
+        cat_m.predict_proba([_probe])
         _status["category_model"] = True
-        logger.info("[Startup] category_model ready")
-    else:
-        logger.warning("[Startup] category_model not found")
-    if os.path.exists(pri_path):
+        logger.info("[Startup] category_model ready (inference validated)")
+    except Exception as e:
+        logger.error(f"[Startup] category_model failed inference: {e}")
+    try:
+        from ml.trainer import load_model
+        from ml.preprocessor import clean_text
+        _probe = clean_text("vpn problem not connecting")
+        pri_m = load_model("priority")
+        pri_m.predict_proba([_probe])
         _status["priority_model"] = True
-        logger.info("[Startup] priority_model ready")
-    else:
-        logger.warning("[Startup] priority_model not found")
+        logger.info("[Startup] priority_model ready (inference validated)")
+    except Exception as e:
+        logger.error(f"[Startup] priority_model failed inference: {e}")
 
     # ── FAISS index ───────────────────────────────────────────────────────
     try:
