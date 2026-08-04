@@ -4,7 +4,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from database.connection import connect_db, close_db
@@ -22,12 +22,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Component readiness — populated during lifespan startup
 _status = {
     "mongodb":              False,
     "category_model":       False,
     "priority_model":       False,
-    "sentence_transformer": False,
+    "sentence_transformer": "not_loaded",   # string: not_loaded | ready
     "faiss":                False,
     "knowledge_base":       False,
 }
@@ -35,7 +34,6 @@ _status = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import asyncio
     t0 = time.perf_counter()
 
     # ── MongoDB ───────────────────────────────────────────────────────────
@@ -46,54 +44,42 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"[Startup] MongoDB failed: {e}")
 
-    # ── ML models — validate with actual inference, not just file existence ──
+    # ── ML models (inference validation) ─────────────────────────────────
     try:
         from ml.trainer import load_model
         from ml.preprocessor import clean_text
         _probe = clean_text("vpn problem not connecting")
-        cat_m = load_model("category")
-        cat_m.predict_proba([_probe])
+        load_model("category").predict_proba([_probe])
         _status["category_model"] = True
-        logger.info("[Startup] category_model ready (inference validated)")
+        logger.info("[Startup] category_model ready")
     except Exception as e:
-        logger.error(f"[Startup] category_model failed inference: {e}")
+        logger.error(f"[Startup] category_model failed: {e}")
+
     try:
         from ml.trainer import load_model
         from ml.preprocessor import clean_text
         _probe = clean_text("vpn problem not connecting")
-        pri_m = load_model("priority")
-        pri_m.predict_proba([_probe])
+        load_model("priority").predict_proba([_probe])
         _status["priority_model"] = True
-        logger.info("[Startup] priority_model ready (inference validated)")
+        logger.info("[Startup] priority_model ready")
     except Exception as e:
-        logger.error(f"[Startup] priority_model failed inference: {e}")
+        logger.error(f"[Startup] priority_model failed: {e}")
 
-    # ── FAISS index ───────────────────────────────────────────────────────
+    # ── FAISS index (load persisted, never rebuild at startup) ────────────
     try:
         load_index()
         from knowledge.faiss_index import is_ready
-        if not is_ready():
-            logger.info("[Startup] No FAISS index — building from knowledge_base/")
-            from knowledge.search import index_knowledge_base
-            index_knowledge_base()
         _status["faiss"] = is_ready()
         _status["knowledge_base"] = is_ready()
         logger.info(f"[Startup] FAISS ready: {_status['faiss']}")
     except Exception as e:
         logger.error(f"[Startup] FAISS failed: {e}")
 
-    # ── SentenceTransformer warmup ────────────────────────────────────────
-    try:
-        from knowledge.embedder import warmup_model
-        t_model = time.perf_counter()
-        logger.info("[Startup] Loading SentenceTransformer…")
-        await asyncio.to_thread(warmup_model)
-        _status["sentence_transformer"] = True
-        logger.info(f"[Startup] SentenceTransformer ready in {round((time.perf_counter()-t_model)*1000)}ms")
-    except Exception as e:
-        logger.error(f"[Startup] SentenceTransformer failed: {e}")
-
-    logger.info(f"[Startup] All components ready in {round((time.perf_counter()-t0)*1000)}ms — status: {_status}")
+    # SentenceTransformer is NOT loaded here — lazy on first search request
+    logger.info(
+        f"[Startup] Application ready in {round((time.perf_counter()-t0)*1000)}ms "
+        f"(SentenceTransformer will load on first search)"
+    )
     yield
     await close_db()
 
@@ -106,12 +92,8 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
 _raw = os.getenv("ALLOWED_ORIGINS", "*").strip()
-if _raw == "*":
-    _origins = ["*"]
-else:
-    _origins = [o.strip().rstrip("/") for o in _raw.split(",") if o.strip()]
+_origins = ["*"] if _raw == "*" else [o.strip().rstrip("/") for o in _raw.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -128,11 +110,13 @@ app.include_router(escalation_router)
 
 
 @app.get("/", response_class=PlainTextResponse)
+@app.head("/")
 async def root():
-    return "SupportPilot AI Backend Running"
+    return PlainTextResponse("SupportPilot AI Backend Running")
 
 
 @app.get("/health")
+@app.head("/health")
 async def health():
     return {"status": "ok"}
 
@@ -140,14 +124,20 @@ async def health():
 @app.get("/api/health")
 async def api_health():
     from knowledge.faiss_index import load_status, is_ready
-    faiss_meta = load_status()
-    # Refresh live FAISS state without rebuilding
+    from knowledge.embedder import is_model_loaded
     _status["faiss"] = is_ready()
     _status["knowledge_base"] = is_ready()
-    all_ready = all(_status.values())
+    _status["sentence_transformer"] = "ready" if is_model_loaded() else "not_loaded"
+    # degraded only if hard components are false
+    hard_ready = (
+        _status["mongodb"] and
+        _status["category_model"] and
+        _status["priority_model"] and
+        _status["faiss"]
+    )
     return {
-        "status":     "ok" if all_ready else "degraded",
+        "status":     "ok" if hard_ready else "degraded",
         "version":    "4.0.0",
         "components": dict(_status),
-        "faiss":      faiss_meta,
+        "faiss":      load_status(),
     }
