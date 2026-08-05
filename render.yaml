@@ -5,7 +5,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: bash render-build.sh
-    startCommand: gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --timeout 120 --graceful-timeout 30 --bind 0.0.0.0:$PORT
+    startCommand: gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --timeout 300 --graceful-timeout 60 --bind 0.0.0.0:$PORT
     envVars:
       - key: MONGO_URI
         sync: false          # set manually in Render dashboard
