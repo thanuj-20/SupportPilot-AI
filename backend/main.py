@@ -75,10 +75,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"[Startup] FAISS failed: {e}")
 
-    # SentenceTransformer is NOT loaded here — lazy on first search request
+    # ── SentenceTransformer — warm up at startup to avoid cold-start timeout ──
+    try:
+        import asyncio as _asyncio
+        from knowledge.embedder import get_model
+        await _asyncio.to_thread(get_model)
+        _status["sentence_transformer"] = "ready"
+        logger.info("[Startup] SentenceTransformer ready")
+    except Exception as e:
+        logger.error(f"[Startup] SentenceTransformer failed: {e}")
+
     logger.info(
-        f"[Startup] Application ready in {round((time.perf_counter()-t0)*1000)}ms "
-        f"(SentenceTransformer will load on first search)"
+        f"[Startup] Application ready in {round((time.perf_counter()-t0)*1000)}ms"
     )
     yield
     await close_db()
