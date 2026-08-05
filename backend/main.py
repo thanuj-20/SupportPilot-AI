@@ -75,19 +75,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"[Startup] FAISS failed: {e}")
 
-    # ── SentenceTransformer — warm up at startup to avoid cold-start timeout ──
-    try:
-        import asyncio as _asyncio
-        from knowledge.embedder import get_model
-        await _asyncio.to_thread(get_model)
-        _status["sentence_transformer"] = "ready"
-        logger.info("[Startup] SentenceTransformer ready")
-    except Exception as e:
-        logger.error(f"[Startup] SentenceTransformer failed: {e}")
-
     logger.info(
-        f"[Startup] Application ready in {round((time.perf_counter()-t0)*1000)}ms"
+        f"[Startup] Application ready in {round((time.perf_counter()-t0)*1000)}ms "
+        "(SentenceTransformer warming up in background)"
     )
+
+    # ── SentenceTransformer — warm up AFTER port is open (background task) ──
+    import asyncio as _asyncio
+
+    async def _warmup_st():
+        try:
+            from knowledge.embedder import get_model
+            await _asyncio.to_thread(get_model)
+            _status["sentence_transformer"] = "ready"
+            logger.info("[Startup] SentenceTransformer ready")
+        except Exception as e:
+            logger.error(f"[Startup] SentenceTransformer failed: {e}")
+
+    _asyncio.ensure_future(_warmup_st())
+
     yield
     await close_db()
 
