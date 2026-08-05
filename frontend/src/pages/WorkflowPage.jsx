@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import axios from "axios";
 import { runWorkflow } from "../services/api";
+
+const HEALTH_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/api$/, "/health");
 
 const AGENTS = [
   { key: "diagnosis",  label: "Diagnosis Agent",  icon: "🔍", desc: "Predicts Category, Priority & Severity" },
@@ -100,6 +103,9 @@ export default function WorkflowPage() {
     setResult(null);
     setActiveIndex(1);
     stopTicker();
+
+    // Wake backend if sleeping (Render free tier spins down after 15 min)
+    try { await axios.get(HEALTH_URL, { timeout: 30000 }); } catch (_) {}
 
     tickerRef.current = setInterval(() => {
       setActiveIndex(prev => (prev < 4 ? prev + 1 : prev));

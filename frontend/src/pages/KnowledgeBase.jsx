@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
+import axios from "axios";
 import { getKBStatus, searchKnowledge, ragKnowledge } from "../services/api";
 import KnowledgeResultCard from "../components/KnowledgeResultCard";
 import RAGResponseCard     from "../components/RAGResponseCard";
 import ArticleModal        from "../components/ArticleModal";
+
+const HEALTH_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/api$/, "/health");
 
 function Spinner() {
   return (
@@ -55,6 +58,8 @@ export default function KnowledgeBase() {
     setResults([]);
     setRagResult(null);
     setSearched(false);
+    // Wake backend if sleeping
+    try { await axios.get(HEALTH_URL, { timeout: 30000 }); } catch (_) {}
     try {
       const [searchRes, ragRes] = await Promise.all([
         searchKnowledge(query.trim(), 5),
