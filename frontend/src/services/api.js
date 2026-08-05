@@ -3,8 +3,8 @@ import axios from "axios";
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 const API  = axios.create({ baseURL: BASE });
 
-// Separate instance for workflow — longer timeout for SentenceTransformer cold start
-const WORKFLOW_API = axios.create({ baseURL: BASE, timeout: 110000 });
+// Separate instance for workflow — 3 min timeout to cover Render cold start + ST warmup
+const WORKFLOW_API = axios.create({ baseURL: BASE, timeout: 180000 });
 
 // Milestone 1
 export const trainModels    = ()                  => API.post("/train");

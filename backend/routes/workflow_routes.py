@@ -51,6 +51,21 @@ class WorkflowRequest(BaseModel):
 @router.post("/workflow/run")
 async def run_workflow_endpoint(req: WorkflowRequest):
     """Run full 4-agent pipeline synchronously, return complete result."""
+    from knowledge.embedder import is_model_loaded
+
+    # Wait up to 3 min for SentenceTransformer to finish loading (background warmup)
+    if not is_model_loaded():
+        logger.info("[Workflow] Waiting for SentenceTransformer to load...")
+        for _ in range(36):          # 36 × 5s = 3 min
+            await asyncio.sleep(5)
+            if is_model_loaded():
+                break
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail="Server is still warming up. Please wait 30 seconds and try again."
+            )
+
     ticket_id = req.ticket_id or str(uuid.uuid4())
     logger.info(f"[Workflow] Created workflow: {ticket_id}")
 

@@ -114,7 +114,9 @@ export default function WorkflowPage() {
       stopTicker();
       setActiveIndex(0);
       if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
-        setError("Workflow timed out. The server may be under load — please try again.");
+        setError("Server is warming up (first request after sleep). Please wait 30 seconds and try again.");
+      } else if (e.response?.status === 503) {
+        setError(e.response.data?.detail || "Server is still warming up. Please wait 30 seconds and try again.");
       } else if (!e.response) {
         setError("Cannot reach backend. Check CORS configuration or backend status.");
       } else {
