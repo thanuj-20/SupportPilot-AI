@@ -77,9 +77,10 @@ export default function WorkflowPage() {
   const [body,        setBody]        = useState("");
   const [userEmail,   setUserEmail]   = useState("");
   const [running,     setRunning]     = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0); // 0=idle,1-4=agent,5=done
+  const [activeIndex, setActiveIndex] = useState(0);
   const [result,      setResult]      = useState(null);
   const [error,       setError]       = useState("");
+  const [warmingUp,   setWarmingUp]   = useState(false);
   const tickerRef = useRef(null);
 
   const isValidEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -104,33 +105,48 @@ export default function WorkflowPage() {
     setActiveIndex(1);
     stopTicker();
 
-    // Wake backend if sleeping (Render free tier spins down after 15 min)
+    // Wake backend if sleeping
     try { await axios.get(HEALTH_URL, { timeout: 30000 }); } catch (_) {}
 
     tickerRef.current = setInterval(() => {
       setActiveIndex(prev => (prev < 4 ? prev + 1 : prev));
     }, 2000);
 
-    try {
-      const { data } = await runWorkflow(subject, body, null, userEmail || null);
-      stopTicker();
-      setActiveIndex(5);
-      setResult(data);
-    } catch (e) {
-      stopTicker();
-      setActiveIndex(0);
-      if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
-        setError("Server is warming up (first request after sleep). Please wait 30 seconds and try again.");
-      } else if (e.response?.status === 503) {
-        setError(e.response.data?.detail || "Server is still warming up. Please wait 30 seconds and try again.");
-      } else if (!e.response) {
-        setError("Cannot reach backend. Check CORS configuration or backend status.");
-      } else {
-        setError(e.response?.data?.detail || `Backend error (${e.response.status}). Please try again.`);
+    // Auto-retry on 503 (ST still warming up) up to 6x with 20s delay
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const { data } = await runWorkflow(subject, body, null, userEmail || null);
+        stopTicker();
+        setActiveIndex(5);
+        setResult(data);
+        setWarmingUp(false);
+        setRunning(false);
+        return;
+      } catch (e) {
+        if (e.response?.status === 503) {
+          setWarmingUp(true);
+          await new Promise(r => setTimeout(r, 20000));
+          continue;
+        }
+        stopTicker();
+        setActiveIndex(0);
+        setWarmingUp(false);
+        setRunning(false);
+        if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
+          setError("Server is warming up. Please wait 20 seconds and try again.");
+        } else if (!e.response) {
+          setError("Cannot reach backend. Please try again in a few seconds.");
+        } else {
+          setError(e.response?.data?.detail || `Backend error (${e.response.status}). Please try again.`);
+        }
+        return;
       }
-    } finally {
-      setRunning(false);
     }
+    stopTicker();
+    setActiveIndex(0);
+    setWarmingUp(false);
+    setRunning(false);
+    setError("Server took too long to warm up. Please try again.");
   };
 
   const diag = result?.diagnosis;
@@ -163,12 +179,19 @@ export default function WorkflowPage() {
 
       {/* Stage status bar */}
       {running && (
-        <div className="bg-gray-900 border border-blue-800 rounded-xl px-4 py-3 flex items-center gap-3">
-          <svg className="w-4 h-4 animate-spin text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24">
+        <div className={`border rounded-xl px-4 py-3 flex items-center gap-3 ${
+          warmingUp ? "bg-yellow-900/20 border-yellow-700" : "bg-gray-900 border-blue-800"
+        }`}>
+          <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24"
+            style={{ color: warmingUp ? "#facc15" : "#60a5fa" }}>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
-          <span className="text-sm text-blue-300 font-medium">{STAGE_LABELS[activeIndex]}</span>
+          <span className={`text-sm font-medium ${
+            warmingUp ? "text-yellow-300" : "text-blue-300"
+          }`}>
+            {warmingUp ? "⏳ Server warming up, retrying automatically…" : STAGE_LABELS[activeIndex]}
+          </span>
         </div>
       )}
 
