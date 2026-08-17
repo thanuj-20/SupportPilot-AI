@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { getKBStatus, searchKnowledge, ragKnowledge } from "../services/api";
 import KnowledgeResultCard from "../components/KnowledgeResultCard";
@@ -44,6 +45,12 @@ export default function KnowledgeBase() {
   const [error,       setError]       = useState("");
   const [modalResult, setModalResult] = useState(null);
   const [modalQuery,  setModalQuery]  = useState("");
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) { setQuery(decodeURIComponent(q)); }
+  }, []);
 
   useEffect(() => {
     getKBStatus()

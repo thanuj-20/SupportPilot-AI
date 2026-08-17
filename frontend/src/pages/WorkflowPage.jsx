@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { runWorkflow } from "../services/api";
 
@@ -82,6 +83,12 @@ export default function WorkflowPage() {
   const [error,       setError]       = useState("");
   const [warmingUp,   setWarmingUp]   = useState(false);
   const tickerRef = useRef(null);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const pre = searchParams.get("prefill");
+    if (pre) setBody(decodeURIComponent(pre));
+  }, []);
 
   const isValidEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 

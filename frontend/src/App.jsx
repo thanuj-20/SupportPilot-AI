@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "./hooks/useAuth";
 import Navbar          from "./components/Navbar";
+import Chatbot         from "./components/Chatbot";
 import Login           from "./pages/Login";
 import Dashboard       from "./pages/Dashboard";
 import Tickets         from "./pages/Tickets";
@@ -31,6 +32,7 @@ function ProtectedLayout({ onLogout, theme, onToggleTheme }) {
         <Route path="/wf-monitor"   element={<WorkflowMonitorPage />} />
         <Route path="*"             element={<Navigate to="/" replace />} />
       </Routes>
+      <Chatbot />
     </>
   );
 }
